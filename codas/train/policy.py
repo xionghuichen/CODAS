@@ -1,4 +1,4 @@
-from SRG.utils.tf_basic import TfBasicClass
+from codas.utils.tf_basic import TfBasicClass
 import tensorflow as tf
 LOG_STD_MAX = 2
 LOG_STD_MIN = -20

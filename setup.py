@@ -17,6 +17,7 @@ setup(
                         if package.startswith("codas")],
         platforms=["all"],
         install_requires=[
-            "stable_baselines=2.10",
+            "stable_baselines==2.10",  # to keep the same implementation of vec_normalization
+            "gym>=0.15", # to keep the same implementation of env.render
         ]
     )

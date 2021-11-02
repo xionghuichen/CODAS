@@ -4,7 +4,7 @@ os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = 'true'
 import os.path as osp
 import pickle
 from collections import deque
-
+import gym
 import cv2
 from stable_baselines import PPO2
 from stable_baselines.common import set_global_seeds
@@ -39,7 +39,7 @@ def get_param():
     # task info
     parser.add_argument('--seed', help='RNG seed', type=int, default=88)
     parser.add_argument('--task', type=str, default='')
-    parser.add_argument('--env_id', help='environment ID', default='InvertedDouble-v4')
+    parser.add_argument('--env_id', help='environment ID', default='InvertedDouble-v5')
     parser.add_argument('--auto_env_map', type=ast.literal_eval, default=True)
     parser.add_argument('--pretrain_path', type=str, default=osp.join(DATA_ROOT, 'saved_model/transition_weights.npy'))
     parser.add_argument('--pretrain_mean_std', type=str, default=osp.join(DATA_ROOT, 'saved_model/state_mean_std.npy'))
@@ -55,8 +55,9 @@ def get_param():
     parser.add_argument('--load_date', type=str, default='')
     parser.add_argument('--load_task', type=str, default='')
     parser.add_argument('--max_sequence', type=int, default=500)
-    # default config: rollout_step=500, minibatch_size=trajectory_batch_size
-    parser.add_argument('--rollout_step', type=int, default=100)  # more rollout_times can reduce GPU memory usage.
+    # reduce the rollout step of traj-discriminator will make the training process more stable
+    # if the size of dataset is not enough.
+    parser.add_argument('--rollout_step', type=int, default=100)
     parser.add_argument('--minibatch_size', type=int, default=-1)
     parser.add_argument('--dis_test', type=ast.literal_eval, default=False)
     parser.add_argument('--deter_policy', type=ast.literal_eval, default=False)
@@ -91,7 +92,6 @@ def get_param():
     parser.add_argument('--emb_output_size', type=int, default=256)
     parser.add_argument('--mlp', type=ast.literal_eval, default=False)
     parser.add_argument('--clip_acs', type=ast.literal_eval, default=True)
-    parser.add_argument('--res_dyn', type=ast.literal_eval, default=False)
     # 3. encode param.
     parser.add_argument('--gan_loss', type=str, default=GanLoss.MINIMAX)
     parser.add_argument('--r2s_rnn_hid_dims', type=ast.literal_eval, default=[128, 128])
@@ -129,8 +129,6 @@ def get_param():
     parser.add_argument('--total_timesteps', type=int, default=40000)
     parser.add_argument('--lambda_a', type=float, default=2)  # 2 is the better setting
     parser.add_argument('--lambda_b', type=float, default=0.1)
-    parser.add_argument('--lambda_policy', type=float, default=0.0)
-    parser.add_argument('--lambda_policy_kl', type=float, default=None)
     # TODO: try to set to 0 for all tasks, since the obs range is computed by a dataset collect with diverse policies.
     parser.add_argument('--norm_bias', type=float, default=0.05)
     parser.add_argument('--norm_std_bound', type=float, default=0.05)
@@ -169,28 +167,24 @@ def get_param():
     if kwargs['alg_type'] == AlgType.VAN_GAN:
         kwargs['traj_dis'] = False
         kwargs['emb_dynamic'] = False
-        kwargs['lambda_policy'] = 0
         kwargs['lambda_b'] = 0
         kwargs['mlp'] = True
         kwargs['cycle_loss'] = False
     elif kwargs['alg_type'] == AlgType.CYCLE_GAN:
         kwargs['traj_dis'] = False
         kwargs['emb_dynamic'] = False
-        kwargs['lambda_policy'] = 0
         kwargs['lambda_b'] = 0
         kwargs['mlp'] = True
         kwargs['cycle_loss'] = True
     elif kwargs["alg_type"] == AlgType.VAN_GAN_STACK:
         kwargs['traj_dis'] = False
         kwargs['emb_dynamic'] = False
-        kwargs['lambda_policy'] = 0
         kwargs['lambda_b'] = 0
         kwargs['mlp'] = True
         kwargs["stack_imgs"] = 4
     elif kwargs['alg_type'] == AlgType.VAN_GAN_RNN:
         kwargs['traj_dis'] = False
         kwargs['emb_dynamic'] = False
-        kwargs['lambda_policy'] = 0
         kwargs['lambda_b'] = 0
         kwargs['mlp'] = False
     elif kwargs['alg_type'] == AlgType.CODAS:
@@ -214,23 +208,7 @@ def get_param():
         kwargs['traj_dis'] = False
     else:
         raise NotImplementedError
-    # if is_dapg_env(kwargs['env_id']):
-    #     # kwargs['max_sequence'] = 200
-    #     # kwargs['trajectory_batch'] = 20
-    #     if 'pen' in kwargs['env_id']:
-    #         # kwargs['max_sequence'] = 100
-    #         # kwargs['lr_rescale'] = 0.5
-    #         # kwargs['rollout_step'] = 20
-    #     if 'hammer' in kwargs['env_id']:
-    #         kwargs['lr_rescale'] = 0.5
-    #         kwargs['rollout_step'] = 50
-    #     # if 'door' in kwargs['env_id']:
-    #     #     kwargs['rollout_step'] = 100
-    #     # kwargs['rollout_step'] = 100
-    #     kwargs['disc_emb_hid_dim'] = 2048
-    #     kwargs['lr_dis'] = 0.0002
-    #     # reduce rollout step for stable training with dynamics model
-    #     # kwargs['rollout_step'] = int(kwargs['max_sequence'] / 4)
+
     kwargs["lr_dis"] *= kwargs["lr_rescale"]
     kwargs["lr_gen"] *= kwargs["lr_rescale"]
     args = argparse.Namespace(**kwargs)
@@ -243,7 +221,6 @@ def get_param():
                              # 'decay_ratio',
                              # 'lambda_b',
                              # 'lambda_a',
-                             # 'lambda_policy',
                              "alg_type",
                              # "lr_rescale",
                              "emb_dynamic",
@@ -255,7 +232,6 @@ def get_param():
                              # "clip_acs",
                              # "cycle_loss",
                              # "dynamic_param",
-                             # "res_dyn",
                              # "norm_bias",
                              # "lr_dyn",
                              # "dyn_l2_loss",
@@ -271,8 +247,7 @@ def get_param():
 
 
 def main():
-    import os
-    os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
     args = get_param()
 
     def task_name_gen():
@@ -301,10 +276,7 @@ def main():
     # step 0: path join
     load_path = osp.join(DATA_ROOT, "saved_model")
 
-    if args.res_dyn:
-        res_dyn_str = '-res'
-    else:
-        res_dyn_str = ''
+
     if args.norm_std_bound == 1:
         norm_std_str = ''
     else:
@@ -336,11 +308,11 @@ def main():
         real_world_env = GeneratorWrapper(real_world_env)
         model = WrappedPolicy(original_policy, env)
         real_model = WrappedPolicy(original_policy, real_world_env)
-        dynamics_model_path = osp.join(DATA_ROOT, '{}_{}_network_weights-full-{}{}{}{}.npy'.
+        dynamics_model_path = osp.join(DATA_ROOT, '{}_{}_network_weights-full-{}{}{}.npy'.
                                        format(args.env_id, args.collect_trajs, args.dynamic_param,
-                                              res_dyn_str, norm_std_str, cpb_str))
-        dynamics_model_param_path = osp.join(DATA_ROOT, '{}_{}_network_weights_param-full-{}{}{}{}.pkl'.
-                                             format(args.env_id, args.collect_trajs, args.dynamic_param, res_dyn_str,
+                                              norm_std_str, cpb_str))
+        dynamics_model_param_path = osp.join(DATA_ROOT, '{}_{}_network_weights_param-full-{}{}{}.pkl'.
+                                             format(args.env_id, args.collect_trajs, args.dynamic_param,
                                                     norm_std_str, cpb_str))
 
         runner = Runner(simulator_env=env, real_world_env=real_world_env, sim_policy=model, real_policy=real_model,
@@ -374,14 +346,13 @@ def main():
         real_world_env = GeneratorWrapper(real_world_env, use_image_noise=args.use_noise_env)
         env = GeneratorWrapper(env)
 
-        dynamics_model_path = osp.join(DATA_ROOT, 'ppo_{}_{}_{}_network_weights-full-{}{}-ca-{}-dn-{}{}{}'.
+        dynamics_model_path = osp.join(DATA_ROOT, 'ppo_{}_{}_{}_network_weights-full-{}-ca-{}-dn-{}{}{}'.
                                        format(args.env_id, args.policy_timestep,
-                                              COLLECT_TRAJ, args.dynamic_param, res_dyn_str, args.clip_acs,
+                                              COLLECT_TRAJ, args.dynamic_param, args.clip_acs,
                                               args.data_normalize, args.minmax_normalize, norm_std_str, cpb_str))
-        dynamics_model_param_path = osp.join(DATA_ROOT, 'ppo_{}_{}_{}_network_weights_param-full-{}{}-ca-{}-dn-{}{}{}'.
+        dynamics_model_param_path = osp.join(DATA_ROOT, 'ppo_{}_{}_{}_network_weights_param-full-{}-ca-{}-dn-{}{}{}'.
                                              format(args.env_id, args.policy_timestep, COLLECT_TRAJ,
-                                                    args.dynamic_param,
-                                                    res_dyn_str, args.clip_acs, args.data_normalize, norm_std_str, cpb_str))
+                                                    args.dynamic_param, args.clip_acs, args.data_normalize, norm_std_str, cpb_str))
         if args.minmax_normalize:
             dynamics_model_path += '-mn'
             dynamics_model_param_path += '-mm'
@@ -481,25 +452,16 @@ def main():
     logger.info("update_dynamics_range_min", update_dynamics_range_min)
     logger.info("update_dynamics_range_max", update_dynamics_range_max)
     if args.emb_dynamic:
-        delta_mean_std = [
-            data_normalization(sim_training_dataset.delta_obs_mean),
-            data_normalization(sim_training_dataset.delta_obs_std),
-        ]
-        logger.info("delta mean std", delta_mean_std)
-        from SRG.codas.src.transition import Transition, TransitionDecoder, TransitionLearner
+        from codas.train.transition import Transition, TransitionDecoder, TransitionLearner
         transition = Transition(transition_hidden_dims=args.dyn_hid_dims, transition_trainable=False,
                                 ob_shape=env.state_space.shape[0],
-                                act_fn=dyn_act_fn,
-                                res_dyn=args.res_dyn, obs_min=update_dynamics_range_min,
-                                obs_max=update_dynamics_range_max,
-                                delta_mean_std=delta_mean_std)
+                                act_fn=dyn_act_fn, obs_min=update_dynamics_range_min,
+                                obs_max=update_dynamics_range_max)
         transition_learned = Transition(transition_hidden_dims=args.dyn_hid_dims, transition_trainable=True,
                                         ob_shape=env.state_space.shape[0],
                                         scope='transition_learn',
-                                        act_fn=dyn_act_fn,
-                                        res_dyn=args.res_dyn, obs_min=update_dynamics_range_min,
-                                        obs_max=update_dynamics_range_max,
-                                        delta_mean_std=delta_mean_std)
+                                        act_fn=dyn_act_fn,  obs_min=update_dynamics_range_min,
+                                        obs_max=update_dynamics_range_max)
         transition_learner = TransitionLearner(transition=transition_learned, transition_target=transition,
                                                ob_shape=env.state_space.shape[0],
                                                ac_shape=env.action_space.shape[0],
@@ -515,7 +477,7 @@ def main():
         transition_learner = None
         transition_decoder = None
     if args.mlp:
-        from SRG.codas.src.mapping_func import MlpEncoder
+        from codas.train.mapping_func import MlpEncoder
         mlp = MlpEncoder(hidden_dims=args.dyn_hid_dims, act_fn=tf.nn.tanh, scope='mlp')
     else:
         mlp = None
@@ -537,7 +499,6 @@ def main():
         decoder = Decoder()
     else:
         assert args.image_size == 128
-        print('sss')
         encoder = LargeEncoder(stack_imgs=1)
         decoder = LargeDecoder()
 
@@ -546,7 +507,7 @@ def main():
                      discriminator=discriminator, obs_discriminator=img_discriminator,
                      encoder=encoder, decoder=decoder, policy=policy,
                      batch_size=args.trajectory_batch,
-                     lambda_a=args.lambda_a, lambda_b=args.lambda_b, lambda_policy=args.lambda_policy,
+                     lambda_a=args.lambda_a, lambda_b=args.lambda_b,
                      ac_shape=env.action_space.shape[0], ob_shape=env.state_space.shape[0],
                      lr_dis=args.lr_dis, lr_gen=args.lr_gen,
                      total_timesteps=args.total_timesteps, decay_ratio=args.decay_ratio,
@@ -822,41 +783,6 @@ def main():
             else:
                 mse_total_iter = 0
             pass_one_step_transition_test = False
-            # you should check the conflict variable name if uncomment this code.
-            # for mse_iter in range(mse_total_iter):
-            #     if transition_buffer.can_sample(2):
-            #         obs_input, acs_input, next_obs_input = transition_buffer.sample(1)
-            #         obs_input = obs_input[0]
-            #         acs_input = acs_input[0]
-            #         next_obs_input = next_obs_input[0]
-            #         # one-step transition test on historical data.
-            #         if np.random.random() < 0.1 and not pass_one_step_transition_test:
-            #             random_idx = np.random.randint(0, obs_input.shape[0])
-            #             ob = obs_input[random_idx]
-            #             ac = acs_input[random_idx]
-            #             de_normalize_next_ob = next_obs_input[random_idx]
-            #             de_normalize_next_ob2 = env.set_ob_and_step(de_normalize_ob, ac)[0]
-            #             if not np.all(np.abs(env.full_state_to_state(de_normalize_next_ob) -
-            #                                  env.full_state_to_state(de_normalize_next_ob2)) < 1e-3):
-            #                 logger.warn("de_normalize_ob: {}".format(env.full_state_to_state(de_normalize_ob)))
-            #                 logger.warn("de_normalize_next_ob: {}".format(env.full_state_to_state(de_normalize_next_ob)))
-            #                 logger.warn("de_normalize_next_ob2: {}".format(env.full_state_to_state(de_normalize_next_ob2)))
-            #                 raise RuntimeError
-            #             pass_one_step_transition_test = True
-            #         obs_unif_input, acs_unif_input, next_obs_unif_input = all_transition_buffer.sample(1)
-            #         obs_input_merge = np.concatenate([obs_input, obs_unif_input[0]], axis=0)
-            #         acs_input_merge = np.concatenate([acs_input, acs_unif_input[0]], axis=0)
-            #         next_obs_input_merge = np.concatenate([next_obs_input, next_obs_unif_input[0]], axis=0)
-            #         good_trans = False
-            #         mse_loss, max_error = transition_learner.update_transition(obs_input_merge, acs_input_merge,
-            #                                                                    next_obs_input_merge)
-            #         if max_error < (adjust_allowed * 0.8) ** 2:
-            #             good_trans = True
-            #         if not good_trans:
-            #             transition_buffer.add([obs_input, acs_input, next_obs_input])
-            #         logger.ma_record_tabular("performance_dynamics/buf-good_trans", good_trans, mse_total_iter)
-            #         logger.ma_record_tabular("performance_dynamics/buf-mse_loss", np.mean(mse_loss), mse_total_iter)
-            #         logger.ma_record_tabular("performance_dynamics/buf-mse_max_error", max_error, mse_total_iter)
             logger.record_tabular("performance/transition_buffer_size", len(transition_buffer))
 
     logger.log('testing policy performance')
@@ -871,7 +797,6 @@ def main():
                                         run_in_realworld=True)
         rews.append(ret_dict[runner.TOTAL_REW])
     expert_reward = np.mean(rews)
-    # if False:
     if is_dapg_env(args.env_id):
         if args.env_id == 'pen-v0':
             expert_reward_lower_bound_assert = expert_dataset.avg_ret * ((args.max_sequence * 0.8) / 200)
@@ -904,7 +829,7 @@ def main():
     obs_real = np.array(obs)
     acs_real = np.array(acs)
 
-    # for new dataset.
+    # unit tset for a new dataset.
     # obs_real_dyn, _, acs_real_dyn, lengths = sample_sim_training_data(1000, raw_state=True)
     # obs_real = np.concatenate([obs_real_dyn, obs_real], axis=0)
     # acs_real = np.concatenate([acs_real_dyn, acs_real], axis=0)
@@ -993,19 +918,6 @@ def main():
 
 
     # load variables
-
-    if args.lambda_policy > 0:
-        assert not is_dapg_env(args.env_id)
-        policy_pretrained_weights = []
-        _, policy_pretrained_prams = PPO2._load_from_file(model_path)
-        for key in policy_pretrained_prams.keys():
-            if key.startswith('model/pi'):
-                policy_pretrained_weights.append(policy_pretrained_prams.get(key))
-        feed_dict = {}
-        ops, phs = policy.pretrained_value_assignment()
-        for ph, weight in zip(phs, policy_pretrained_weights):
-            feed_dict[ph] = weight
-        sess.run(ops, feed_dict=feed_dict)
 
     if args.load_date is not '':
         from RLA.easy_log.tester import load_from_record_date
@@ -1100,8 +1012,6 @@ def main():
                 logger.ma_record_tabular("loss/mapping_l2_loss", np.mean(res_dict["mapping_l2_loss"]), max_len)
                 logger.ma_record_tabular("learning/m_grad_norm", np.mean(res_dict["m_grad_norm"]), max_len)
                 logger.ma_record_tabular("lr/gen_lr", np.mean(res_dict["gen_lr"]), max_len)
-                if args.lambda_policy > 0:
-                    logger.ma_record_tabular("loss/policy_loss", np.mean(res_dict["policy_loss"]), max_len)
                 if args.cycle_loss:
                     logger.ma_record_tabular("loss/obs_gen_loss", np.mean(res_dict["obs_gen_loss"]), max_len)
                     logger.ma_record_tabular("loss/state_mapping_likelihood",

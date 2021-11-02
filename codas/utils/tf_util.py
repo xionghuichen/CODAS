@@ -1,10 +1,10 @@
 # import numpy as np
 import tensorflow as tf  # pylint: ignore-module
-# import copy
-# import os
-# import functools
-# import collections
-# import multiprocessing
+import copy
+import os
+import functools
+import collections
+import multiprocessing
 #
 #
 # def mask_filter(ops, mask_ops):

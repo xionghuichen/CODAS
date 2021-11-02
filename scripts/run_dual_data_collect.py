@@ -1,12 +1,12 @@
 import argparse
 import os.path as osp
 import tqdm
-from SRG.mj_env.dyn_envs import get_new_density_env, get_new_gravity_env, get_new_friction_env, get_source_env
-from SRG.utils.functions import *
-from SRG.utils.private import *
-from SRG.utils.structure import *
-from SRG.codas.src.env_wrapper import GeneratorWrapper
-from SRG.codas.src.env_wrapper import make_vec_env
+from codas.reset_able_mj_env.dyn_envs import get_new_density_env, get_new_gravity_env, get_new_friction_env, get_source_env
+from codas.utils.functions import *
+from private import *
+from codas.utils.config import *
+from codas.wrapper.env_wrapper import GeneratorWrapper
+from codas.wrapper.env_wrapper import make_vec_env
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
 from stable_baselines import PPO2
 from stable_baselines.common.policies import MlpPolicy

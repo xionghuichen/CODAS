@@ -3,14 +3,16 @@ import os.path as osp
 import tqdm
 import mj_envs
 import pickle
-from SRG.utils.functions import *
-from SRG.utils.private import *
-from SRG.utils.structure import *
-from SRG.codas.src.rollout import Runner
+from codas.utils.functions import *
+from private import *
+from codas.utils.config import *
+from codas.train.rollout import Runner
 from stable_baselines.common import set_global_seeds
-from SRG.codas.src.env_wrapper import GeneratorWrapper
-from SRG.codas.src.policy_wrapper import WrappedPolicy
-from SRG.codas.src.env_config_map import env_config_map
+from codas.wrapper.env_wrapper import GeneratorWrapper
+from codas.wrapper.policy_wrapper import WrappedPolicy
+from env_config_map import env_config_map
+
+
 def get_param():
     parser = argparse.ArgumentParser("Tensorflow Implementation of Variational Sequence")
     parser.add_argument('--seed', help='RNG seed', type=int, default=88)

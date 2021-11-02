@@ -19,7 +19,7 @@ def soft_clip(input, min_v, max_v):
 
 class Transition(TfBasicClass):
     def __init__(self, transition_hidden_dims, transition_trainable, res_dyn,
-                 obs_min, obs_max, ob_shape, delta_mean_std, act_fn=tf.nn.tanh, scope='transition'):
+                 obs_min, obs_max, ob_shape, act_fn=tf.nn.tanh, scope='transition'):
         self.act_fn = act_fn
         self.res_dyn = res_dyn
         self.transition_hidden_dims = transition_hidden_dims
@@ -27,7 +27,6 @@ class Transition(TfBasicClass):
         self.ob_shape = ob_shape
         self.obs_min = obs_min
         self.obs_max = obs_max
-        self.delta_mean_std = delta_mean_std
 
         TfBasicClass.__init__(self, scope)
 
@@ -44,13 +43,9 @@ class Transition(TfBasicClass):
         for hidden_dim in self.transition_hidden_dims[1:]:
             next_ob_sim = tf.layers.dense(next_ob_sim, hidden_dim, activation=self.act_fn,
                                           trainable=self.transition_trainable)
-        if self.res_dyn:
-            delta_next_ob_sim = tf.layers.dense(next_ob_sim, self.ob_shape, trainable=self.transition_trainable)
-            delta_next_ob_sim = delta_next_ob_sim * self.delta_mean_std[1] + self.delta_mean_std[0]
-            next_ob_sim = norm_obs_sim + delta_next_ob_sim
-        else:
-            next_ob_sim = tf.layers.dense(next_ob_sim, self.ob_shape, trainable=self.transition_trainable)
-            next_ob_sim = next_ob_sim
+
+        next_ob_sim = tf.layers.dense(next_ob_sim, self.ob_shape, trainable=self.transition_trainable)
+        next_ob_sim = next_ob_sim
         # if not self.transition_trainable:
         #     next_ob_sim = tf.clip_by_value(next_ob_sim, self.obs_min, self.obs_max)
         next_ob_sim = (tf.nn.tanh(next_ob_sim) + 1.001) / 2.0 * (self.obs_max - self.obs_min) + self.obs_min

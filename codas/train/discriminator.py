@@ -1,5 +1,5 @@
 
-from SRG.utils.tf_basic import TfBasicClass
+from codas.utils.tf_basic import TfBasicClass
 from RLA.easy_log.tester import tester
 
 from codas.utils.tf_util import one_dim_layer_normalization

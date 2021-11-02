@@ -37,7 +37,7 @@ class VarSeq(object):
                  emb_dynamic: bool, cycle_loss: bool,
                  encoder: TfBasicClass, init_first_state: bool,
                  decoder: TfBasicClass,  label_image_test: bool,
-                 ob_shape, ac_shape, lambda_a: float, lambda_b: float,  lambda_policy:float,
+                 ob_shape, ac_shape, lambda_a: float, lambda_b: float,
                  minibatch_size: int, merge_d_train: bool,  stack_imgs:int, random_set_to_zero:bool, scope='var_seq'):
         self.scope = scope
         self.sess = sess
@@ -71,14 +71,12 @@ class VarSeq(object):
         self.label_image_test = label_image_test
         self.lambda_a = lambda_a
         self.lambda_b = lambda_b
-        self.lambda_policy = lambda_policy
         self.total_timesteps = total_timesteps
         self.ob_shape = ob_shape
         self.dis_test = dis_test
         self.ac_shape = ac_shape
         self.stack_imgs = stack_imgs
         self.policy_loss = None
-        self.lambda_policy_kl = None
         self.batch_zero_state = None
         self.batch_zero_O = None
         self.batch_zero_A = None
@@ -365,23 +363,6 @@ class VarSeq(object):
                     self.hat_S_r_mean_mask = self.hat_S_r_distribution.mean() * self.mask
                     self.hat_S_r_std_mask = self.hat_S_r_distribution.stddev() * self.mask
 
-                    # if self.lambda_policy > 0:
-                    #     # use shape with parameters
-                    #     # ob_shape, ac_shape = self.ob_real2sim_sample.shape[2], self.A_r_ph.shape[2]
-                    #     stacked_ac = mask_filter(A_r, self.mask[..., 0]) # tf.reshape(self.A_r_ph[:, 1:, :], [-1, ac_shape])
-                    #     stacked_ac = tf.clip_by_value(stacked_ac, -1.0, 1.0)
-                    #     ob_real2sim_sample_mask = mask_filter(hat_S_r, self.mask[..., 0])
-                    #     self.hat_A_r_mean, self.hat_A_r_logstd = self.policy.obj_graph_construct(ob_real2sim_sample_mask)
-                    #     # the stored value is loglogstd....
-                    #     self.hat_A_r_logstd = tf.exp(self.hat_A_r_logstd)
-                    #     log_normalizer = self.ac_shape / 2 * tf.log(2 * math.pi) + \
-                    #                      0.5 * tf.reduce_sum(self.hat_A_r_logstd, axis=1)
-                    #     # Diagonal Gaussian action probability, for every action
-                    #     self.action_logprob = - tf.reduce_sum(tf.square(stacked_ac - self.hat_A_r_mean)
-                    #                                      / (2 * tf.exp(self.hat_A_r_logstd)), axis=1) - log_normalizer
-                    #     # FIXME: add action space to init
-                    #     self.policy_loss = tf.reduce_mean(safe_log(tf.exp(self.action_logprob)))
-                assert self.lambda_policy_kl is None
                 with tf.variable_scope('loss_and_train', reuse=False):
                     dis_fake_filter = mask_filter(dis_fake, self.mask[..., 0])
                     if tester.hyper_param["gan_loss"] == GanLoss.WGAN:
@@ -401,8 +382,6 @@ class VarSeq(object):
                                                                                      obs_dis_fake_filter))
                         self.obs_gen_loss = - tf.reduce_mean(obs_generator_loss)
                         self.mapping_loss += self.lambda_a * self.obs_gen_loss - self.lambda_b * self.state_mapping_likelihood
-                    # if self.lambda_policy > 0:
-                    #     self.mapping_loss -= self.lambda_policy * self.policy_loss
                     mapping_var_list = self.real2sim_mapping.trainable_variables() + self.embedding.trainable_variables()
                     if not self.label_image_test:
                         mapping_var_list += self.sim2real_mapping.trainable_variables()
@@ -461,8 +440,6 @@ class VarSeq(object):
         log_grad_summary(grad_and_vars)
         with tf.variable_scope('r2sr2', reuse=False):
             tf.summary.histogram("log_prob", self.real2sim2real_logprob)
-            # if self.lambda_policy > 0:
-            #     tf.summary.histogram("acs_log_prob", self.action_logprob)
         self.summary = tf.summary.merge_all()
 
         self.dis_summary = []
@@ -664,9 +641,7 @@ class VarSeq(object):
             self.S_sim_ph: S_sim,
             self.adjust_allowed_ph: np.expand_dims(adjust_allowed, axis=0)}
         ops = [self.all_r2s_hidden_state, self.hat_S_r_mask, self.hat_O_r_mask, self.var_length, self.var_length_sim]
-        # if self.lambda_policy > 0:
-        #     ops.append(self.hat_A_r_mean)
-        # else:
+
         ops.append(self.do_nothing_op)
         if self.cycle_loss:
             feed_dict.update({
@@ -736,10 +711,7 @@ class VarSeq(object):
             ops = [self.hat_S_r_mask, self.hat_S_r_mean_mask, self.hat_S_r_std_mask,
                    self.r2s_hidden_state, self.hat_O_r_mask, self.gen_loss, self.mapping_likelihood,
                    self.mapping_loss, self.gen_learning_rate, self.l2_reg_loss, self.m_grad_norm]
-            # if self.lambda_policy > 0:
-            #     # , self.policy_grad_norm
-            #     ops.extend([self.policy_loss, self.hat_A_r_mean, self.hat_A_r_logstd])
-            # else:
+
             ops.extend([self.do_nothing_op, self.do_nothing_op, self.do_nothing_op])
             if self.cycle_loss:
                 ops.extend([self.state_mapping_likelihood, self.obs_gen_loss])

@@ -5,24 +5,28 @@ import pickle
 import os.path as osp
 import tqdm
 from typing import Union
-import stable_baselines
-from SRG.utils.functions import *
-from SRG.utils.private import *
-from SRG.utils.structure import *
-from codas.wrapper.env_wrapper import GeneratorWrapper, is_dapg_env, make_vec_env
-from codas.wrapper.policy_wrapper import WrappedPolicy
-from SRG.codas.src.rollout import Runner
-from SRG.codas.src.env_config_map import env_config_map
+import gym
+
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
-# from stable_baselines import PPO2
-from SRG.codas.src.ppo2 import PPO2
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.schedules import LinearSchedule
 from stable_baselines.common import set_global_seeds
 from stable_baselines.common.callbacks import EvalCallback, BaseCallback
 from stable_baselines.common.vec_env import sync_envs_normalization, VecEnv
+
 from RLA.easy_log.tester import tester
 from RLA.easy_log import logger
+
+from codas.utils.functions import *
+from codas.utils.config import *
+from codas.wrapper.env_wrapper import GeneratorWrapper, is_dapg_env, make_vec_env
+from codas.wrapper.policy_wrapper import WrappedPolicy
+from codas.train.rollout import Runner
+from codas.rl.ppo2 import PPO2
+from private import *
+from env_config_map import env_config_map
+
+
 def get_param():
     parser = argparse.ArgumentParser("Tensorflow Implementation of Variational Sequence")
     parser.add_argument('--seed', help='RNG seed', type=int, default=88)
@@ -58,6 +62,7 @@ def get_param():
         kwargs.update(env_config_map[kwargs['env_id']])
     args = argparse.Namespace(**kwargs)
     return args
+
 
 class CollectStateCallback(BaseCallback):
     def __init__(self, eval_env: Union[gym.Env, VecEnv],
@@ -180,8 +185,13 @@ def main():
     tester.add_record_param(['info',
                              "seed",
                              "env_id", "policy_timestep"])
-    tester.configure(task_name='data_collect', private_config_path='../../../rla_config.yaml',
-                     run_file='run_data_collect.py', log_root='../')
+
+    def get_package_path():
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    tester.configure(task_name='data_collect',
+                     private_config_path=os.path.join(get_package_path(), 'rla_config.yaml'),
+                     log_root=get_package_path())
     tester.log_files_gen()
     tester.print_args()
 
