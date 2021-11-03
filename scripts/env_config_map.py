@@ -3,16 +3,13 @@ env_config_map = {
         "total_timesteps": 20000,
         "policy_timestep": 200000,
         "mapping_train_epoch": 2,
-        # "norm_bias": 1,
     },
     "Walker2d-v4": {
         "total_timesteps": 40000,
-        # "norm_bias": 1,
     },
     "Hopper-v4": {
         "total_timesteps": 40000,
         "rollout_step": 25,
-        # "norm_bias": 3,
     },
     "HalfCheetah-v2": {
         "total_timesteps": 10000,
@@ -20,7 +17,6 @@ env_config_map = {
     },
     "Swimmer-v4": {
         "total_timesteps": 10000,
-        # "norm_bias": 0.2, # or 1?
     },
     "InvertedDouble-v4": {
         "total_timesteps": 40000,

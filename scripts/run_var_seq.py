@@ -55,6 +55,7 @@ def get_param():
     parser.add_argument('--load_date', type=str, default='')
     parser.add_argument('--load_task', type=str, default='')
     parser.add_argument('--max_sequence', type=int, default=500)
+    parser.add_argument("--max_tf_util", help="per process gpu memory fraction fot tf", type=float, default=1.0)
     # reduce the rollout step of traj-discriminator will make the training process more stable
     # if the size of dataset is not enough.
     parser.add_argument('--rollout_step', type=int, default=100)
@@ -122,15 +123,11 @@ def get_param():
     parser.add_argument('--dyn_batch_size', type=int, default=1024)
     parser.add_argument('--mapping_train_epoch', type=int, default=5)
     parser.add_argument('--dis_train_epoch', type=int, default=1)
-    # python run_var_seq.py --info='bench-traj=10' --env_id='Swimmer-v4'
-    # --dyn_batch_size=1024 --mapping_train_epoch 5 --rollout_step 100 --lr_rescale 1.0 --trajectory_batch=10
-    parser.add_argument('--trajectory_batch', type=int, default=10)  # 10 seems to be OK
+    parser.add_argument('--trajectory_batch', type=int, default=10)
     parser.add_argument('--decay_ratio', type=float, default=0.5)
     parser.add_argument('--total_timesteps', type=int, default=40000)
-    parser.add_argument('--lambda_a', type=float, default=2)  # 2 is the better setting
+    parser.add_argument('--lambda_a', type=float, default=2)
     parser.add_argument('--lambda_b', type=float, default=0.1)
-    # TODO: try to set to 0 for all tasks, since the obs range is computed by a dataset collect with diverse policies.
-    parser.add_argument('--norm_bias', type=float, default=0.05)
     parser.add_argument('--norm_std_bound', type=float, default=0.05)
     parser.add_argument('--stoc_init_range', type=float, default=0.005)
     parser.add_argument('--grad_clip_norm', type=float, default=10)
@@ -148,14 +145,10 @@ def get_param():
     parser.add_argument('--do_save_checkpoint', type=ast.literal_eval, default=True)
     parser.add_argument('--pool_size', type=int, default=6000)
     parser.add_argument('--data_reused_times', type=int, default=10)
-    # for data-size tolerance test
+    # ablation study
     parser.add_argument('--data_used_fraction', type=float, default=1)
-    #iclr rebuttal hyperparameter
     parser.add_argument("--use_noise_env", type=ast.literal_eval, default=False)
-    #icml new hyperparameter
     parser.add_argument("--dual_policy_noise_std", help="use obs collected by noise action", type=float, default=0.0)
-    parser.add_argument("--max_tf_util", help="per process gpu memory fraction fot tf", type=float, default=1.0)
-    parser.add_argument("--use_full_dataset", help="use obs collected when ppo is training", type=ast.literal_eval, default=False)
 
     args = parser.parse_args()
     kwargs = vars(args)
@@ -217,31 +210,13 @@ def get_param():
     # add parameters to track:
     tester.add_record_param(['info',
                              "seed",
-                             # 'trajectory_batch',
-                             # 'decay_ratio',
-                             # 'lambda_b',
-                             # 'lambda_a',
                              "alg_type",
-                             # "lr_rescale",
                              "emb_dynamic",
                              "traj_dis",
                              'dual_policy_noise_std',
                              'dynamic_param',
                              'stoc_init_range',
                              'traj_limitation',
-                             # "clip_acs",
-                             # "cycle_loss",
-                             # "dynamic_param",
-                             # "norm_bias",
-                             # "lr_dyn",
-                             # "dyn_l2_loss",
-                             # "mapping_l2_loss",
-                             # "adjust_allowed",
-                             # "clip_policy_bound",
-                            # "norm_std_bound",
-                            #  "lr_gen",
-                             # "mapping_train_epoch",
-                             # "filter_traj"
                              ])
     return args
 
@@ -275,8 +250,6 @@ def main():
     os.makedirs(os.path.join(tester.results_dir, "imgs/"), exist_ok=True)
     # step 0: path join
     load_path = osp.join(DATA_ROOT, "saved_model")
-
-
     if args.norm_std_bound == 1:
         norm_std_str = ''
     else:
@@ -289,7 +262,6 @@ def main():
         OBS_BOUND = 150
     else:
         OBS_BOUND = 100
-
     img_shape = {ImgShape.WIDTH: args.image_size, ImgShape.HEIGHT: args.image_size, ImgShape.CHANNEL: 3}
     # step 1: environment construction
     is_robot_env = is_dapg_env(args.env_id)
@@ -445,10 +417,11 @@ def main():
 
     norm_range = norm_max - norm_min
     logger.info("norm obs scale ", norm_range)
-    update_dynamics_range_min = norm_min - args.norm_bias * norm_range
-    update_dynamics_range_max = norm_max + args.norm_bias * norm_range
-    update_dynamics_range_min_trans_learn = norm_min - (args.norm_bias - 1e-3) * norm_range
-    update_dynamics_range_max_trans_learn = norm_max + (args.norm_bias - 1e-3) * norm_range
+    epsilon_expanded = 0.05
+    update_dynamics_range_min = norm_min - epsilon_expanded * norm_range
+    update_dynamics_range_max = norm_max + epsilon_expanded * norm_range
+    update_dynamics_range_min_trans_learn = norm_min - (epsilon_expanded - 1e-3) * norm_range
+    update_dynamics_range_max_trans_learn = norm_max + (epsilon_expanded - 1e-3) * norm_range
     logger.info("update_dynamics_range_min", update_dynamics_range_min)
     logger.info("update_dynamics_range_max", update_dynamics_range_max)
     if args.emb_dynamic:
@@ -528,16 +501,11 @@ def main():
     tester.new_saver(var_prefix='', max_to_keep=1)
     pool_size = int(args.pool_size if args.pool_size > 0 else args.trajectory_batch * args.data_reused_times * 1000)
     trajecory_buffer = TrajectoryBuffer(pool_size, has_img=False)
-    transition_buffer = TrajectoryBuffer(1000, has_img=False, pop=True)
-    all_transition_buffer = TrajectoryBuffer(3 * 20, has_img=False, pop=False)
     mapping_train_epoch = args.mapping_train_epoch
     test_episode = 20
     total_timesteps = args.total_timesteps
     adjust_allowed = args.adjust_allowed
-    adjust_allowed_buffer = deque(maxlen=1000)
-
     dis_train_epoch = args.dis_train_epoch
-
     default_zero_state = var_seq.real2sim_mapping.zero_state_run(1, sess=sess)
 
     # object -> obs stype:
@@ -768,12 +736,7 @@ def main():
                                   np.mean(l2_reg))
             logger.record_tabular("performance_dynamics/sample-mse_max_error{}".format(name),
                                   max_error)
-            adjust_allowed_buffer.append(max_error)
             if max_error > (adjust_allowed * 0.8) ** 2:
-                transition_buffer.add([obs_input, acs_input,
-                                       next_obs_input])
-                all_transition_buffer.add([obs_input, acs_input,
-                                           next_obs_input])
                 logger.ma_record_tabular("performance_dynamics/sample-good_trans", 0, 100)
             else:
                 logger.ma_record_tabular("performance_dynamics/sample-good_trans", 1, 100)
@@ -783,7 +746,6 @@ def main():
             else:
                 mse_total_iter = 0
             pass_one_step_transition_test = False
-            logger.record_tabular("performance/transition_buffer_size", len(transition_buffer))
 
     logger.log('testing policy performance')
     rews = []
