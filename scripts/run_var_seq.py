@@ -257,7 +257,7 @@ def main():
     if args.clip_policy_bound:
         cpb_str = ''
     else:
-        cpb_str = 'cpb'
+        cpb_str = 'ncpb'
     if is_dapg_env(args.env_id):
         OBS_BOUND = 150
     else:
@@ -280,10 +280,10 @@ def main():
         real_world_env = GeneratorWrapper(real_world_env)
         model = WrappedPolicy(original_policy, env)
         real_model = WrappedPolicy(original_policy, real_world_env)
-        dynamics_model_path = osp.join(DATA_ROOT, '{}_{}_network_weights-full-{}{}{}.npy'.
+        dynamics_model_path = osp.join(load_path, '{}_{}_network_weights-full-{}{}{}.npy'.
                                        format(args.env_id, args.collect_trajs, args.dynamic_param,
                                               norm_std_str, cpb_str))
-        dynamics_model_param_path = osp.join(DATA_ROOT, '{}_{}_network_weights_param-full-{}{}{}.pkl'.
+        dynamics_model_param_path = osp.join(load_path, '{}_{}_network_weights_param-full-{}{}{}.pkl'.
                                              format(args.env_id, args.collect_trajs, args.dynamic_param,
                                                     norm_std_str, cpb_str))
 
@@ -318,13 +318,13 @@ def main():
         real_world_env = GeneratorWrapper(real_world_env, use_image_noise=args.use_noise_env)
         env = GeneratorWrapper(env)
 
-        dynamics_model_path = osp.join(DATA_ROOT, 'ppo_{}_{}_{}_network_weights-full-{}-ca-{}-dn-{}{}{}'.
-                                       format(args.env_id, args.policy_timestep,
-                                              COLLECT_TRAJ, args.dynamic_param, args.clip_acs,
-                                              args.data_normalize, args.minmax_normalize, norm_std_str, cpb_str))
-        dynamics_model_param_path = osp.join(DATA_ROOT, 'ppo_{}_{}_{}_network_weights_param-full-{}-ca-{}-dn-{}{}{}'.
-                                             format(args.env_id, args.policy_timestep, COLLECT_TRAJ,
-                                                    args.dynamic_param, args.clip_acs, args.data_normalize, norm_std_str, cpb_str))
+        dynamics_model_path = osp.join(DATA_ROOT, f'ppo_{args.env_id}_{args.policy_timestep}_{COLLECT_TRAJ}_network_weights-full'
+                                                  f'-{args.dynamic_param}-ca-{args.clip_acs}-'
+                                                  f'dn-{args.data_normalize}{args.minmax_normalize}{args.norm_std_str}{cpb_str}')
+        dynamics_model_param_path = osp.join(DATA_ROOT, f'ppo_{args.env_id}_{args.policy_timestep}_{COLLECT_TRAJ}_'
+                                                        f'network_weights_param-full-{ args.dynamic_param}-ca-{args.clip_acs}-'
+                                                        f'dn-{args.data_normalize}{args.norm_std_str}{args.cpb_str}')
+
         if args.minmax_normalize:
             dynamics_model_path += '-mn'
             dynamics_model_param_path += '-mm'

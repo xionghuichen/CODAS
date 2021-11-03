@@ -18,11 +18,6 @@ env_config_map = {
     "Swimmer-v4": {
         "total_timesteps": 10000,
     },
-    "InvertedDouble-v4": {
-        "total_timesteps": 40000,
-        "policy_timestep": 200000,
-        "mapping_train_epoch": 2,
-    },
     "InvertedDouble-v5": {
         "total_timesteps": 40000,
         "policy_timestep": 200000,
