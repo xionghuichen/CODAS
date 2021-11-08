@@ -320,10 +320,10 @@ def main():
 
         dynamics_model_path = osp.join(DATA_ROOT, f'ppo_{args.env_id}_{args.policy_timestep}_{COLLECT_TRAJ}_network_weights-full'
                                                   f'-{args.dynamic_param}-ca-{args.clip_acs}-'
-                                                  f'dn-{args.data_normalize}{args.minmax_normalize}{args.norm_std_str}{cpb_str}')
+                                                  f'dn-{args.data_normalize}{args.minmax_normalize}{norm_std_str}{cpb_str}')
         dynamics_model_param_path = osp.join(DATA_ROOT, f'ppo_{args.env_id}_{args.policy_timestep}_{COLLECT_TRAJ}_'
                                                         f'network_weights_param-full-{ args.dynamic_param}-ca-{args.clip_acs}-'
-                                                        f'dn-{args.data_normalize}{args.norm_std_str}{args.cpb_str}')
+                                                        f'dn-{args.data_normalize}{norm_std_str}{cpb_str}')
 
         if args.minmax_normalize:
             dynamics_model_path += '-mn'

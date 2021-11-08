@@ -18,10 +18,9 @@ def soft_clip(input, min_v, max_v):
 
 
 class Transition(TfBasicClass):
-    def __init__(self, transition_hidden_dims, transition_trainable, res_dyn,
+    def __init__(self, transition_hidden_dims, transition_trainable,
                  obs_min, obs_max, ob_shape, act_fn=tf.nn.tanh, scope='transition'):
         self.act_fn = act_fn
-        self.res_dyn = res_dyn
         self.transition_hidden_dims = transition_hidden_dims
         self.transition_trainable = transition_trainable
         self.ob_shape = ob_shape
