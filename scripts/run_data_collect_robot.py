@@ -11,7 +11,7 @@ from stable_baselines.common import set_global_seeds
 from codas.wrapper.env_wrapper import GeneratorWrapper
 from codas.wrapper.policy_wrapper import WrappedPolicy
 from env_config_map import env_config_map
-
+import gym
 
 def get_param():
     parser = argparse.ArgumentParser("Tensorflow Implementation of Variational Sequence")
