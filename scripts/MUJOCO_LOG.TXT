@@ -1,6 +1,0 @@
-Sat Dec 18 22:35:18 2021
-ERROR: Expired activation key
-
-Sat Dec 18 22:36:02 2021
-ERROR: Expired activation key
-
