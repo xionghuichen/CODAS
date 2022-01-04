@@ -32,7 +32,6 @@ from RLA.easy_log import logger
 from RLA.easy_log.tools import time_used_wrap, time_record, time_record_end
 import pdb
 
-
 def get_param():
     parser = argparse.ArgumentParser("Tensorflow Implementation of Variational Sequence")
     import ast
