@@ -123,7 +123,6 @@ class GeneratorWrapper(object):
     def _set_ob(self, ob):
         raw_env = self.env
         from codas.reset_able_mj_env.swimmer_v4 import SwimmerEnv
-        from codas.reset_able_mj_env.inverted_double_pendulum_v4 import InvertedDoublePendulumEnv as InvertedDoublePendulumEnvv4
         from codas.reset_able_mj_env.inverted_double_pendulum_v5 import InvertedDoublePendulumEnv as InvertedDoublePendulumEnvv5
         from codas.reset_able_mj_env.ant_v3 import AntEnv
         from gym.envs.mujoco import InvertedPendulumEnv

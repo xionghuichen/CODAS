@@ -11,7 +11,7 @@ from stable_baselines.common import set_global_seeds
 from codas.wrapper.env_wrapper import GeneratorWrapper
 from codas.wrapper.policy_wrapper import WrappedPolicy
 from env_config_map import env_config_map
-
+import gym
 
 def get_param():
     parser = argparse.ArgumentParser("Tensorflow Implementation of Variational Sequence")
@@ -26,7 +26,7 @@ def get_param():
     parser.add_argument('--policy_timestep', type=int, default=1000000)
     parser.add_argument('--collect_trajs', type=int, default=COLLECT_TRAJ)
     parser.add_argument('--max_sequence', type=int, default=200)
-    parser.add_argument('--image_size', type=int, default=1024)
+    parser.add_argument('--image_size', type=int, default=64)
     parser.add_argument('--dynamic_param', type=float, default=1.0)
     parser.add_argument('--sim_noise', type=float, default=0.5)
 
@@ -80,9 +80,9 @@ def main():
         img_traj = ret_dict[runner.IMG_TRAJ]
         traj_len = ret_dict[runner.TRAJ_LEN]
         tot_rews.append(total_rew)
-        print(total_rew, traj_len)
 
         img_traj = (img_traj * 255.0).astype(np.uint8)
+        print(total_rew, traj_len)
         # import matplotlib.pyplot as plt
         # for i in range(200):
         #     plt.imshow(img_traj[i])
