@@ -530,24 +530,21 @@ def main():
     #       - policy-infer transition generation;
     #       - runner.run_traj;
 
-    # normalization 关系:
-    # L1: GeneratorWrapper： 处理训练PPO自带的normalization，所有和GeneratorWrapper 交互的接口都是经过normalization 的状态，
-    # 也就是可以直接和PPO policy 交互的state；
-    # L2: 为了方便RNN和dynamics model 的训练，我们对 RNN 和dynamics model的输入输出进行归一化处理。
-    # 由于PPO normalization的结果可能对于整个环境是由偏的（因为其局限于所最后收敛策略的mean state），
-    # VarSeq和Dynamics Model使用额外的归一化，用dataset 的mean std进行归一化，见data_normalization和data_denormalization。
-    # 因此，VarSeq和Dynamics Model输入的训练数据是归一化后的，输出的预测也是归一化后的。
-    # L3: VarSeq和Dynamics Model 和外界的交互主要由以下几个部分：
-    #    1. env.step_ob_and_step
-    #    2. map_holder.do_map
-    # 对于env.step_ob_and_step，如果输入的obs 是来源于VarSeq和Dynamics Model的，需要进行data_denormalization 在输入给step_ob_and_step。
-    # 对于map_holder.do_map, 输入也不需要oracle的状态，所以不需要考虑归一化问题；
-    # 我们内部已经处理好了反归一化逻辑，其输出是反归一化的结果，所以不用在外部做额外处理
+    # 2-layer normalization relation:
+    # L1: GeneratorWrapper: Handles the normalization that comes from PPO training.
+    #   All interfaces that interact with the GeneratorWrapper are in the state after normalization, that is, the state that can directly interact with the PPO policy;
+    # L2: for better training RNN and dynamics model, we normalize the input and output of RNN and dynamics model. 
+    #   See data_normalization and data_denormalization. 
+    # The interaction between VarSeq and Dynamics Model and the outside world mainly consists of the following parts:
+    #   1. env.step_ob_and_step
+    #   2. map_holder.do_map
+    # For env.step_ob_and_step, if the input obs are from VarSeq and Dynamics Model, data_denormalization needs to be performed and input to step_ob_and_step.
+    # For map_holder.do_map, the input does not need the state of the oracle, so there is no need to consider the normalization problem; We have already processed the de-normalization logic internally, and its output is the result of de-normalization, so there is no need to do additional processing externally
 
-    # OBS 的类型：
-    # simulator state： 模拟器迭代用的state
-    # simulator full state: 根据模拟器迭代用的state 推导出来的完整的state （给出了额外的环境信息），这个state 只用于 生成obs
-    # obs state： 根据 full state 生成 obs，obs 是 策略训练用的
+    # Type of OBS:
+    # - simulator state: The state used for simulator iteration
+    # - simulator full state: The complete state derived from the state used for the simulator iteration (gives additional environment information), this state is only used to generate obs
+    # - obs state: Generate obs according to full state, obs are used for policy training
 
     def sample_sim_training_data(traj_batch_size=None, raw_state=False):
         if traj_batch_size is None:
