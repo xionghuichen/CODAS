@@ -68,7 +68,7 @@ To visualize the behavior of data collecting policies in the target domain
 ``` shell
 cd scripts/
 python run_visualize_mujoco.py --env_id {task_name} # for mujoco tasks
-python visualize_robot.py --env_id {task_name} # for robot tasks
+python visualize_robot.py --env_id {task_name} # for hand DAPG tasks
 ```
 
 To visualize the bahavior of polices on the trained mapping function
