@@ -1,6 +1,8 @@
 # CODAS
 The Official Code for ["Cross-Modal Domain Adaptation for Cost-Efficient Visual Reinforcement Learning"](https://proceedings.neurips.cc/paper/2021/hash/68264bdb65b97eeae6788aa3348e553c-Abstract.html)
 ![](./resources/poster.png)
+
+
 # Code Structure
 CODAS
 
@@ -60,3 +62,17 @@ You can check plot_demo.ipynb for more details. The figure of the simplest setti
 
 
 There are also some scrips in ``./rla_scrips`` to manage the experimental logs. 
+
+# Visualize result
+To visualize the behavior of data collecting policies in the target domain
+``` shell
+cd scripts/
+python run_visualize_mujoco.py --env_id {task_name} # for mujoco tasks
+python visualize_robot.py --env_id {task_name} # for robot tasks
+```
+
+To visualize the bahavior of polices on the trained mapping function
+``` shell
+cd scripts/
+python visualize_result.py --env_id {task_name} --load_date {load_date} # the load date consists of a full date of experiment, e.g., "2021/12/22/20-46-36-239564"
+```
