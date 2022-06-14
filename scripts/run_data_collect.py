@@ -221,7 +221,7 @@ def main():
         args.policy_timestep = int((args.policy_timestep // n_steps) * n_steps)
         model = PPO2(policy=MlpPolicy, env=env, verbose=1, n_steps=n_steps, nminibatches=32, lam=0.95, gamma=0.99,
                         noptepochs=10, ent_coef=0.0, learning_rate=sched_lr.value, cliprange=0.2, tensorboard_log=tb_log_dir)
-        eval_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=args.stoc_init_range)
+        eval_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=0.005) # stoc_init_range is set to the default value of the real-world environment.
         eval_env = VecNormalize(eval_env, norm_obs=False, training=False)
         eval_freq = int( (args.policy_timestep * (1-args.start_fraction)) / (args.collect_trajs /args.trajs_per_callback))
         tmp_file_path = "/tmp/codas_callback_{}_cache.npz".format(args.env_id)
