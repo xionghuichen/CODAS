@@ -56,6 +56,7 @@ def get_param():
     parser.add_argument('--trajs_per_callback', type=int, default=2)
     parser.add_argument('--tot_training_trajs', type=int, default=COLLECT_SIM_TRAJ)
     parser.add_argument('--action_noise_std', type=float, default=0.0)
+    parser.add_argument('--stoc_init_range', type=float, default=0.005)
     args = parser.parse_args()
     kwargs = vars(args)
     if kwargs['auto_env_map'] and kwargs['env_id'] in env_config_map:
@@ -210,7 +211,7 @@ def main():
         model_path = osp.join(load_path, "ppo_{}_{}_full.zip".format(args.env_id, args.policy_timestep))
         env_path = osp.join(load_path, "{}_full".format(args.env_id))
         sched_lr = LinearSchedule(args.policy_timestep, 0., 3e-4)
-        env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param)
+        env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=args.stoc_init_range)
         env = VecNormalize(env, norm_obs=False)
         if args.log_tb:
             tb_log_dir = args.log_dir
@@ -220,7 +221,7 @@ def main():
         args.policy_timestep = int((args.policy_timestep // n_steps) * n_steps)
         model = PPO2(policy=MlpPolicy, env=env, verbose=1, n_steps=n_steps, nminibatches=32, lam=0.95, gamma=0.99,
                         noptepochs=10, ent_coef=0.0, learning_rate=sched_lr.value, cliprange=0.2, tensorboard_log=tb_log_dir)
-        eval_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param)
+        eval_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=args.stoc_init_range)
         eval_env = VecNormalize(eval_env, norm_obs=False, training=False)
         eval_freq = int( (args.policy_timestep * (1-args.start_fraction)) / (args.collect_trajs /args.trajs_per_callback))
         tmp_file_path = "/tmp/codas_callback_{}_cache.npz".format(args.env_id)
