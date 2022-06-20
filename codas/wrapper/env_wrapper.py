@@ -141,11 +141,6 @@ class GeneratorWrapper(object):
         elif isinstance(self.env.env.env, InvertedPendulumEnv):
             qpos = ob[:raw_env.model.nq]
             qvel = ob[raw_env.model.nq:]
-        elif isinstance(self.env.env.env, InvertedDoublePendulumEnvv4):
-            qpos1 = ob[0:1]
-            qpos2 = np.arcsin(ob[1:raw_env.model.nq])
-            qpos = np.concatenate([qpos1, qpos2])
-            qvel = ob[raw_env.model.nq + raw_env.model.nq - 1:raw_env.model.nq + raw_env.model.nq - 1 + raw_env.model.nv]
         elif isinstance(self.env.env.env, InvertedDoublePendulumEnvv5):
             qpos1 = ob[0:1]
             qpos2 = np.arcsin(ob[1:raw_env.model.nq])
