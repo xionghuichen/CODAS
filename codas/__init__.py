@@ -20,7 +20,7 @@ register(
 
 
 register(
-    id='InvertedDouble-v4',
+    id='InvertedDouble-v5',
     max_episode_steps=1000,
-    entry_point='codas.reset_able_mj_env.inverted_double_pendulum_v4:InvertedDoublePendulumEnv',
+    entry_point='codas.reset_able_mj_env.inverted_double_pendulum_v5:InvertedDoublePendulumEnv',
 )
