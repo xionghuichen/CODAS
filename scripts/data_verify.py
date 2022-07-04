@@ -63,122 +63,6 @@ def get_param():
     return args
 
 
-class CollectStateCallback(BaseCallback):
-    def __init__(self, eval_env: Union[gym.Env, VecEnv],
-                 trajs_per_callback: int = 5,
-                 tot_steps: int = 1000000, start_fraction: float = 0.5,
-                 end_fraction: float = 0.5, tot_trajs_to_collect=600,
-                 deterministic: bool = True,
-                 max_horizon: int = 1002,
-                 output_path: str = "/tmp/codas_callback_cache.npz", verbose: int = 1):
-        super(CollectStateCallback, self).__init__(verbose=verbose)
-        self.tot_steps = tot_steps
-        self.start_fraction = start_fraction
-        self.output_path = output_path
-        self.traj_obs = []
-        self.traj_action = []
-        self.traj_length = []
-        self.traj_return = []
-        self.collected_traj_lengths = []
-        self.eval_env = eval_env
-        self.deterministic = deterministic
-        self.tot_trajs_to_collect = tot_trajs_to_collect
-        self.max_horizon = max_horizon
-        # calculate collect interval and trajs per collection
-        num_validate_callbacks = tot_trajs_to_collect // trajs_per_callback
-        validate_fraction = max(0, end_fraction - start_fraction)
-        self.callback_interval = int((tot_steps * validate_fraction) // num_validate_callbacks)
-        self.start_callback_step = int(tot_steps * start_fraction)
-        self.start_callback_id = 0
-        self.final_callback_id = num_validate_callbacks
-
-        self.trajs_per_callback = trajs_per_callback
-        self.curr_callback_id = 0
-        print("\033[32msetting data collection callback\033[0m:\n"
-              "\ttotal callbacks:{}\n"
-              "\tstarting timestep:{}\n"
-              "\teval freq:{}\n"
-              "\ttrajs_per_callback:{}".format(
-            self.final_callback_id, self.start_callback_step, self.callback_interval, trajs_per_callback))
-
-    def _on_step(self):
-        curr_timestep = self.n_calls + 1
-        # if curr_timestep > 8192:
-        tester.time_step_holder.set_time(curr_timestep)
-        if curr_timestep <= self.start_callback_step or \
-                ((curr_timestep - self.start_callback_step) % self.callback_interval) != 0 \
-                or self.curr_callback_id >= self.final_callback_id:
-            return True
-        # collect trajectories
-        self.curr_callback_id += 1
-        if self.curr_callback_id < self.final_callback_id:
-            num_trajs_to_collect = self.trajs_per_callback
-        else:
-            num_trajs_to_collect = self.tot_trajs_to_collect - len(self.traj_obs)
-        obs, actions, lengths, returns = self.collect_trajs(num_trajs_to_collect)
-        self.traj_obs += obs
-        self.traj_action += actions
-        self.traj_length += lengths
-        self.traj_return += returns
-        if self.curr_callback_id >= self.final_callback_id:
-            # write collected trajs to temp file
-            if len(self.traj_obs) > self.tot_trajs_to_collect:
-                self.traj_obs = self.traj_obs[:self.tot_trajs_to_collect]
-                self.traj_length = self.traj_length[:self.tot_tra]
-            np.savez(self.output_path, obs=self.traj_obs, acs=self.traj_action, traj_len=self.traj_length,
-                     ep_rets=self.traj_return)
-            print("saving trajs:", len(self.traj_obs), self.traj_obs[0].shape, "to", self.output_path)
-        return True
-
-    def collect_trajs(self, num_trajs):
-        if num_trajs <= 0:
-            return []
-        tot_obs = []
-        ep_rewards = []
-        ep_lengths = []
-        tot_actions = []
-        sync_envs_normalization(self.training_env, self.eval_env)
-        # obs_mean = self.eval_env.obs_rms.mean
-        # obs_var = self.eval_env.obs_rms.var
-        ret_mean = self.eval_env.ret_rms.mean
-        ret_var = self.eval_env.ret_rms.var
-        epsilon = self.eval_env.epsilon
-        # obs_std = np.sqrt(obs_var + epsilon)
-        ret_std = np.sqrt(ret_var + epsilon)
-        for i in range(num_trajs):
-            # if not isinstance(self.eval_env, VecEnv) or i == 0:
-            obs = self.eval_env.reset()
-            done, state = False, None
-            episode_reward = 0.0
-            episode_length = 0
-            obs_traj = np.zeros((self.max_horizon, self.eval_env.observation_space.shape[0]), dtype=np.float64)
-            ac_traj = np.zeros((self.max_horizon, self.eval_env.action_space.shape[0]), dtype=np.float64)
-            for j in range(self.max_horizon):
-                action, state = self.model.predict(obs, state=state, deterministic=self.deterministic)
-                # denormalize obs
-                raw_obs = obs  # (obs * obs_std) + obs_mean
-                obs_traj[j] = raw_obs
-                ac_traj[j] = action
-                obs, reward, done, _info = self.eval_env.step(action)
-                raw_reward = reward * ret_std
-                episode_reward += raw_reward
-                episode_length += 1
-                if done:
-                    break
-            tot_obs.append(obs_traj)
-            tot_actions.append(ac_traj)
-            ep_rewards.append(episode_reward)
-            ep_lengths.append(episode_length)
-        logger.record_tabular("perf/ret", np.mean(ep_rewards))
-        logger.dump_tabular()
-        if self.verbose > 0:
-            print("Callback {}/{}:\t average return: {:.01f}\t average length:{:.01f}".format(self.curr_callback_id,
-                                                                                              self.final_callback_id,
-                                                                                              np.mean(ep_rewards),
-                                                                                              np.mean(ep_lengths)))
-        return tot_obs, tot_actions, ep_lengths, ep_rewards
-
-
 def main():
     args = get_param()
     kwargs = vars(args)
@@ -214,8 +98,6 @@ def main():
             real_env.norm_reward = False
             print("env_id", env_id, "obs_rms", real_env.obs_rms.mean, "norm_obs", real_env.norm_obs, "train", real_env.training)
             real_env = GeneratorWrapper(real_env)
-
-
             img_shape = {ImgShape.WIDTH: args.image_size, ImgShape.HEIGHT: args.image_size, ImgShape.CHANNEL: 3}
             runner = Runner(simulator_env=None, real_world_env=real_env, max_horizon=args.max_sequence, img_shape=img_shape,
                             clip_acs=False, real_policy=model, sim_policy=None, exact_consist=False)

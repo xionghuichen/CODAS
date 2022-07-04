@@ -108,7 +108,7 @@ def get_param():
     parser.add_argument('--resc_act_fn', type=str, default=ActivateFn.ID)
     parser.add_argument('--real_ob_input', type=ast.literal_eval, default=False)
     parser.add_argument('--hard_training', type=ast.literal_eval, default=False)
-    parser.add_argument('--retrain_dynamics', type=ast.literal_eval, default=False)
+    parser.add_argument('--retrain_dynamics', type=ast.literal_eval, default=True)
     parser.add_argument('--filter_traj', type=ast.literal_eval, default=False)
     # learning params
     parser.add_argument('--lr_gen', type=float, default=0.0001)
