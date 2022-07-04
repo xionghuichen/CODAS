@@ -1,3 +1,5 @@
+# Created by xionghuichen at 2022/6/24
+# Email: chenxh@lamda.nju.edu.cn
 import argparse
 import os
 
@@ -9,6 +11,7 @@ from typing import Union
 import gym
 import ast
 
+from codas.utils import tf_util as U
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.common.schedules import LinearSchedule
@@ -42,7 +45,6 @@ def get_param():
     parser.add_argument('--max_sequence', type=int, default=1002)
     parser.add_argument('--image_size', type=int, default=64)
     parser.add_argument('--dynamic_param', type=float, default=1.0)
-    parser.add_argument('--retrain', type=ast.literal_eval, default=False)
 
     parser.add_argument('--deter', type=ast.literal_eval, default=False)
     parser.add_argument('--auto_env_map', type=ast.literal_eval, default=True)
@@ -136,12 +138,11 @@ class CollectStateCallback(BaseCallback):
         ep_lengths = []
         tot_actions = []
         sync_envs_normalization(self.training_env, self.eval_env)
-        epsilon = self.eval_env.epsilon
-        obs_mean = self.eval_env.obs_rms.mean
-        obs_var = self.eval_env.obs_rms.var
-        obs_std = np.sqrt(obs_var + epsilon)
+        # obs_mean = self.eval_env.obs_rms.mean
+        # obs_var = self.eval_env.obs_rms.var
         ret_mean = self.eval_env.ret_rms.mean
         ret_var = self.eval_env.ret_rms.var
+        epsilon = self.eval_env.epsilon
         # obs_std = np.sqrt(obs_var + epsilon)
         ret_std = np.sqrt(ret_var + epsilon)
         for i in range(num_trajs):
@@ -154,7 +155,7 @@ class CollectStateCallback(BaseCallback):
             ac_traj = np.zeros((self.max_horizon, self.eval_env.action_space.shape[0]), dtype=np.float64)
             for j in range(self.max_horizon):
                 action, state = self.model.predict(obs, state=state, deterministic=self.deterministic)
-                # denormalize obs [unnecessary now]
+                # denormalize obs
                 raw_obs = obs  # (obs * obs_std) + obs_mean
                 obs_traj[j] = raw_obs
                 ac_traj[j] = action
@@ -197,101 +198,13 @@ def main():
 
     load_path = osp.join(DATA_ROOT, "saved_model")
     set_global_seeds(args.seed)
-    model_path = osp.join(load_path, "ppo_{}_{}_full.zip".format(args.env_id, args.policy_timestep))
-    env_path = osp.join(load_path, "{}_full".format(args.env_id))
-    if (not (osp.exists(model_path) and osp.exists(env_path))) or args.retrain:
-        print("The pre-trained target-domain policy cannot be found.  We will train a new target-domain policy. ")
-        sched_lr = LinearSchedule(args.policy_timestep, 0., 3e-4)
-        # stoc_init_range is set to the default value of the real-world environment.
-        env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=0.005)
-        env = VecNormalize(env, norm_obs=False)
-        if args.log_tb:
-            tb_log_dir = args.log_dir
-        else:
-            tb_log_dir = None
-        model = PPO2(policy=MlpPolicy, env=env, verbose=1, n_steps=2048, nminibatches=32, lam=0.95, gamma=0.99,
-                     noptepochs=10, ent_coef=0.0, learning_rate=sched_lr.value, cliprange=0.2,
-                     tensorboard_log=tb_log_dir)
-        model.learn(total_timesteps=args.policy_timestep)
-        model.save(model_path)
-        env.save(env_path)
-
-    print("full data collection")
-    # train a ppo policy from scratch in the source domain
-    sched_lr = LinearSchedule(args.policy_timestep, 0., 3e-4)
-    if args.log_tb:
-        tb_log_dir = args.log_dir
-    else:
-        tb_log_dir = None
-    n_steps = 2048
-    args.policy_timestep = int((args.policy_timestep // n_steps) * n_steps)
-    sim_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=args.stoc_init_range)
-    sim_env = VecNormalize(sim_env, norm_obs=False)
-    eval_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=args.stoc_init_range)
-    eval_env = VecNormalize(eval_env, norm_obs=False, training=False)
-    model = PPO2(policy=MlpPolicy, env=sim_env, verbose=1, n_steps=n_steps, nminibatches=32, lam=0.95, gamma=0.99,
-                 noptepochs=10, ent_coef=0.0, learning_rate=sched_lr.value, cliprange=0.2, tensorboard_log=tb_log_dir)
-    tmp_file_path = "/tmp/codas_callback_{}_cache.npz".format(args.env_id)
-    callback = CollectStateCallback(eval_env, trajs_per_callback=args.trajs_per_callback,
-                                    tot_steps=args.policy_timestep,
-                                    start_fraction=args.start_fraction,
-                                    end_fraction=args.end_fraction,
-                                    tot_trajs_to_collect=args.tot_training_trajs,
-                                    deterministic=False, max_horizon=args.max_sequence,
-                                    output_path=tmp_file_path, verbose=1)
-    model.learn(total_timesteps=args.policy_timestep, callback=callback)
-    # read obs from tmp file and delete tmp file
-    data = np.load(tmp_file_path)
-    train_obs = data['obs']
-    train_acs = data['acs']
-    train_traj_len = data['traj_len']
-    train_ep_rets = data['ep_rets']
-    os.system("rm {}".format(tmp_file_path))
-
-    # collect the target-domain dataset.
-    print("loaded pre-trained policy from {}".format(load_path))
-    model = PPO2.load(model_path)
-    real_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=0.005)
-    real_env = VecNormalize.load(env_path, real_env)
-    real_env.training = False
-    real_env.norm_reward = False
-    real_env = GeneratorWrapper(real_env)
-
-    img_shape = {ImgShape.WIDTH: args.image_size, ImgShape.HEIGHT: args.image_size, ImgShape.CHANNEL: 3}
-    runner = Runner(simulator_env=None, real_world_env=real_env, max_horizon=args.max_sequence, img_shape=img_shape,
-                    clip_acs=False, real_policy=model, sim_policy=None, exact_consist=False)
-
-    obs_acs = {"obs": [], "acs": [], "ep_rets": [], "imgs": [], 'ac_means': [], 'traj_len': []}
-
-    model_name = str(model_path).split('/')[-1].split('.')[0]
-    tot_rews = []
-    for _ in tqdm.tqdm(range(args.collect_trajs)):
-        ret_dict = runner.run_traj(deter=False, mapping_holder=None, render_img=True, run_in_realworld=True)
-        total_rew = ret_dict[runner.TOTAL_REW]
-        ob_traj = ret_dict[runner.OB_TRAJ]
-        ac_traj = ret_dict[runner.AC_TRAJ]
-        img_traj = ret_dict[runner.IMG_TRAJ]
-        traj_len = ret_dict[runner.TRAJ_LEN]
-        tot_rews.append(total_rew)
-        print(total_rew, traj_len)
-        img_traj = (img_traj * 255.0).astype(np.uint8)
-        obs_acs['obs'].append(ob_traj)
-        obs_acs['acs'].append(ac_traj)
-        obs_acs['ep_rets'].append(total_rew)
-        obs_acs['imgs'].append(img_traj)
-        obs_acs['traj_len'].append(traj_len)
-
-    output_path = osp.join(args.expert_root, model_name + '_' +
-                           str(args.collect_trajs) + '_deter_' + str(args.deter) + '_uint8_full.npz')
-
-    print(args.env_id, np.mean(np.array(tot_rews)), np.std(np.array(tot_rews)))
-
-
-    np.savez(output_path,
-             obs=obs_acs['obs'], acs=obs_acs['acs'], ep_rets=obs_acs['ep_rets'], imgs=obs_acs['imgs'],
-             traj_len=obs_acs['traj_len'], train_obs=train_obs, train_acs=train_acs,
-             train_ep_rets=train_ep_rets, train_traj_len=train_traj_len)
-    print("---------- done -------------")
+    sess = U.make_session(adaptive=True).__enter__()
+    for env_id in ["InvertedPendulum-v2", "Walker2d-v4", "Hopper-v4", "HalfCheetah-v2", "Swimmer-v4", "InvertedDouble-v5"]:
+        model_path = osp.join(load_path, "ppo_{}_{}_full.zip".format(args.env_id, args.policy_timestep))
+        env_path = osp.join(load_path, "{}_full".format(env_id))
+        real_env = make_vec_env(env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=0.005)
+        real_env = VecNormalize.load(env_path, real_env)
+        print("env_id", env_id, "obs_rms", real_env.obs_rms.mean, "norm_obs", real_env.norm_obs, "train", real_env.training)
 
 
 if __name__ == '__main__':

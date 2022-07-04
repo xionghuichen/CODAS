@@ -108,7 +108,7 @@ def get_param():
     parser.add_argument('--resc_act_fn', type=str, default=ActivateFn.ID)
     parser.add_argument('--real_ob_input', type=ast.literal_eval, default=False)
     parser.add_argument('--hard_training', type=ast.literal_eval, default=False)
-    parser.add_argument('--retrain_dynamics', type=ast.literal_eval, default=False)
+    parser.add_argument('--retrain_dynamics', type=ast.literal_eval, default=True)
     parser.add_argument('--filter_traj', type=ast.literal_eval, default=False)
     # learning params
     parser.add_argument('--lr_gen', type=float, default=0.0001)
@@ -304,7 +304,8 @@ def main():
             real_expert_path = sim_expert_path = osp.join(DATA_ROOT, 'ppo_{}_{}_full_{}_deter_False_uint8_full.npz'.
                                    format(args.env_id, args.policy_timestep, args.collect_trajs))
         env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=args.dynamic_param, stoc_init_range=args.stoc_init_range)
-        real_world_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=1.0, stoc_init_range=0.005) # 0.005 is set to the default value of the real-world tasks.
+        # 0.005 is set to the default value of the real-world tasks.
+        real_world_env = make_vec_env(args.env_id, num_env=args.num_env, dynamic_param=1.0, stoc_init_range=0.005)
         env = VecNormalize.load(env_path, env)
         env.training = False
         env.norm_reward = False
